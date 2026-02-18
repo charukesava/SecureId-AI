@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+  <head>
+    <title>SecureID AI - KYC Verification</title>
+
+    <style>
+      body {
+        font-family: Arial;
+        background: #0f172a;
+        color: white;
+        text-align: center;
+        padding-top: 30px;
+      }
+      .box {
+        background: #111827;
+        padding: 30px;
+        border-radius: 15px;
+        width: 420px;
+        margin: auto;
+      }
+      button {
+        padding: 10px 20px;
+        background: #22c55e;
+        border: none;
+        color: white;
+        font-size: 16px;
+        margin-top: 15px;
+        cursor: pointer;
+      }
+      video {
+        border-radius: 10px;
+        margin-top: 10px;
+      }
+      .result {
+        margin-top: 20px;
+        font-size: 18px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>🔐 SecureID AI KYC Verification</h1>
+
+    <div class="box">
+      <p>Upload ID Card:</p>
+      <input type="file" id="id" />
+
+      <br /><br />
+      <button onclick="startCamera()">📷 Start Camera</button>
+
+      <br />
+      <video id="video" width="300" height="220" autoplay></video>
+      <br />
+      <button onclick="capture()">Capture Selfie</button>
+
+      <button onclick="verify()">Verify Identity</button>
+
+      <div class="result" id="result"></div>
+    </div>
+
+    <script>
+      let video = document.getElementById("video");
+      let canvas = document.createElement("canvas");
+      let selfieBlob = null;
+
+      function startCamera() {
+        navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+          video.srcObject = stream;
+        });
+      }
+
+      function capture() {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        let ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0);
+
+        canvas.toBlob((blob) => {
+          selfieBlob = blob;
+
+          let imgURL = URL.createObjectURL(blob);
+          video.srcObject.getTracks().forEach((track) => track.stop()); // STOP CAMERA
+          video.style.display = "none";
+
+          let img = document.createElement("img");
+          img.src = imgURL;
+          img.width = 300;
+          img.style.borderRadius = "10px";
+          video.parentNode.insertBefore(img, video);
+
+          alert("Selfie captured!");
+        }, "image/jpeg");
+      }
+
+      async function verify() {
+        let id = document.getElementById("id").files[0];
+
+        if (!id || !selfieBlob) {
+          alert("Upload ID and capture selfie");
+          return;
+        }
+
+        let formData = new FormData();
+        formData.append("id", id);
+        formData.append("selfie", selfieBlob, "selfie.jpg");
+
+        document.getElementById("result").innerHTML = "AI analyzing...";
+
+        try {
+          let response = await fetch("http://127.0.0.1:5000/verify", {
+            method: "POST",
+            body: formData,
+          });
+
+          let text = await response.text();
+          console.log("RAW RESPONSE:", text);
+
+          let data = JSON.parse(text);
+
+          document.getElementById("result").innerHTML =
+            "<b>Face Match:</b> " +
+            data.face_match +
+            "%<br>" +
+            "<b>Risk Score:</b> " +
+            data.risk_score +
+            "<br>" +
+            "<b>Status:</b> " +
+            data.status +
+            (data.duplicate ? "<br><b>Duplicate Identity Detected</b>" : "");
+        } catch (err) {
+          console.log(err);
+          document.getElementById("result").innerHTML =
+            "Cannot connect to AI server. Check backend running.";
+        }
+      }
+    </script>
+  </body>
+</html>
